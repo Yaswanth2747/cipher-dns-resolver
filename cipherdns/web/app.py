@@ -21,6 +21,11 @@ from cipherdns.core.server import DNSServer
 from cipherdns.core.cache import DNSCache
 from cipherdns.core.doh_client import DoHClient
 from cipherdns.analysis.zeek_analyzer import ZeekAnalyzer
+from cipherdns.core.system_dns import (
+    get_system_dns_status,
+    enable_system_dns,
+    disable_system_dns,
+)
 
 # Initialize FastAPI App
 app = FastAPI(title="cipherDNS Dashboard", version="1.0.0")
@@ -240,4 +245,31 @@ async def get_tls_evidence():
         None, dns_server.doh_client.get_tls_certificate_evidence
     )
     return JSONResponse(evidence)
+
+
+class SystemDnsPayload(BaseModel):
+    enable: bool
+
+
+@app.get("/api/system-dns")
+async def api_get_system_dns():
+    """Checks whether the operating system DNS is routed to cipherDNS."""
+    loop = asyncio.get_running_loop()
+    status = await loop.run_in_executor(None, get_system_dns_status)
+    return JSONResponse(status)
+
+
+@app.post("/api/system-dns")
+async def api_set_system_dns(payload: SystemDnsPayload):
+    """Enables or disables system-wide DNS routing to cipherDNS (127.0.0.1)."""
+    loop = asyncio.get_running_loop()
+    if payload.enable:
+        res = await loop.run_in_executor(None, enable_system_dns)
+    else:
+        res = await loop.run_in_executor(None, disable_system_dns)
+    await ws_manager.broadcast({
+        "type": "system_dns_change",
+        "status": res.get("status", {}),
+    })
+    return JSONResponse(res)
 

@@ -40,6 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
     connectWebSocket();
     startLocalTtlCountdown();
     fetchCurrentStatus();
+    checkSystemDnsStatus();
     reloadCacheTable();
 });
 
@@ -122,6 +123,10 @@ function handleServerEvent(event) {
             if (event.stats) {
                 updateStats(event.stats);
             }
+            break;
+
+        case "system_dns_change":
+            applySystemDnsUI(event.status);
             break;
     }
 }
@@ -276,6 +281,65 @@ async function changeProvider(providerKey) {
         }
     } catch (e) {
         console.error("Error changing provider:", e);
+    }
+}
+
+// System DNS Capture Controller
+let isSystemDnsRouted = false;
+
+async function checkSystemDnsStatus() {
+    try {
+        const res = await fetch("/api/system-dns");
+        if (res.ok) {
+            const data = await res.json();
+            applySystemDnsUI(data);
+        }
+    } catch (e) {
+        console.error("Error checking system DNS status:", e);
+    }
+}
+
+function applySystemDnsUI(status) {
+    const dot = document.getElementById("systemCaptureDot");
+    const text = document.getElementById("systemCaptureText");
+    const btn = document.getElementById("btnSystemDnsToggle");
+    if (!dot || !text) return;
+
+    isSystemDnsRouted = !!(status && status.is_routed_to_cipherdns);
+
+    if (isSystemDnsRouted) {
+        dot.style.background = "var(--accent-emerald)";
+        dot.style.boxShadow = "0 0 8px var(--accent-emerald)";
+        text.textContent = "Laptop Traffic: Captured";
+        text.style.color = "var(--accent-emerald)";
+        if (btn) btn.title = "Click to restore default system DNS";
+    } else {
+        dot.style.background = "var(--accent-amber)";
+        dot.style.boxShadow = "none";
+        text.textContent = "Route Laptop Traffic";
+        text.style.color = "var(--text-secondary)";
+        if (btn) btn.title = "Click to route all Chrome, curl, wget traffic through cipherDNS";
+    }
+}
+
+async function toggleSystemDnsCapture() {
+    const nextState = !isSystemDnsRouted;
+    const text = document.getElementById("systemCaptureText");
+    if (text) text.textContent = "Applying...";
+
+    try {
+        const res = await fetch("/api/system-dns", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enable: nextState }),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            applySystemDnsUI(data.status);
+        }
+    } catch (e) {
+        alert("Failed to toggle system DNS: " + e.message);
+        checkSystemDnsStatus();
     }
 }
 

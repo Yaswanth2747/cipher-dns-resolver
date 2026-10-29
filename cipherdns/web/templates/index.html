@@ -58,6 +58,15 @@
                     </div>
                 </div>
 
+                <!-- Laptop DNS Capture Pill / Button -->
+                <div class="control-group">
+                    <label class="control-label">Laptop Traffic</label>
+                    <button id="btnSystemDnsToggle" class="mode-btn system-capture-btn" onclick="toggleSystemDnsCapture()" title="Click to toggle system-wide DNS routing">
+                        <span class="status-dot" id="systemCaptureDot" style="background:#64748b;box-shadow:none;"></span>
+                        <span id="systemCaptureText">Checking OS DNS...</span>
+                    </button>
+                </div>
+
                 <!-- Live WebSocket Pill -->
                 <div class="status-pill connected" id="wsStatusPill">
                     <span class="status-dot"></span>
