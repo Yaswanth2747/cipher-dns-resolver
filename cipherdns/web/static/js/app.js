@@ -8,7 +8,7 @@ let reconnectTimer = null;
 let idleResetTimer = null;
 let currentCacheEntries = [];
 let localTtlInterval = null;
-let currentTrafficScope = "clean"; // default: Clean Demo (User Sites)
+let currentTrafficScope = "all"; // default: All Traffic (Complete PC)
 
 // DOM Elements
 const statusRing = document.getElementById("statusRing");
@@ -138,30 +138,13 @@ function matchesTrafficScope(item) {
     if (!item) return false;
     const cat = item.category || "web";
     const app = (item.source_app || "").toLowerCase();
-    const domain = (item.domain || "").toLowerCase();
 
-    const isSystemNoise = cat === "system" || 
-        domain.includes("ubuntu.com") || 
-        domain.includes("canonical.com") || 
-        domain.includes("snapcraft.io") || 
-        domain.includes(".arpa") || 
-        domain.includes("connectivity-check") || 
-        domain.includes("detectportal") ||
-        domain.includes(".local") ||
-        domain.includes(".lan") ||
-        domain.includes(".home") ||
-        domain.includes("ntp.org") ||
-        domain.includes("wsdd");
-
-    if (currentTrafficScope === "all") {
-        return true;
-    } else if (currentTrafficScope === "clean") {
-        return !isSystemNoise;
-    } else if (currentTrafficScope === "chrome") {
-        return (app.includes("chrome") || app.includes("browser") || (!isSystemNoise && app !== "curl" && app !== "wget"));
+    if (currentTrafficScope === "chrome") {
+        return (app.includes("chrome") || app.includes("browser") || cat === "web");
     } else if (currentTrafficScope === "cli") {
         return (app.includes("curl") || app.includes("wget") || cat === "cli");
     }
+    // "all" mode: shows all traffic
     return true;
 }
 
@@ -437,14 +420,13 @@ function renderCacheTable(entries) {
     filtered.forEach(entry => {
         const statusClass = entry.status === "expired" ? "expired" : (entry.status === "expiring" ? "expiring" : "active");
         
-        // GeoIP & Country Flag Answer Rendering
+        // Resolved IP Answer Rendering
         let ipsHtml = "";
         if (entry.enriched_answers && entry.enriched_answers.length > 0) {
             ipsHtml = entry.enriched_answers.map(ea => `
                 <span class="ip-geo-badge" title="${escapeHtml(ea.org || ea.country || 'Host IP')} • ${escapeHtml(ea.city || '')}">
-                    <span class="flag-emoji">${ea.flag || '🌐'}</span>
                     <span>${escapeHtml(ea.ip)}</span>
-                    ${ea.org ? `<span class="geo-asn-tag">${escapeHtml(ea.org.slice(0, 16))}</span>` : ''}
+                    ${ea.org ? `<span class="geo-asn-tag">(${escapeHtml(ea.org.slice(0, 16))})</span>` : ''}
                 </span>
             `).join("");
         } else if (entry.answers && entry.answers.length > 0) {
@@ -866,9 +848,8 @@ async function runSpeedDuel() {
         contestants.forEach(c => {
             const enrichedIps = (c.enriched_ips || []).map(item => `
                 <span class="ip-geo-badge" title="${escapeHtml(item.org || item.country || '')}">
-                    <span class="flag-emoji">${item.flag || '🌐'}</span>
                     <span>${escapeHtml(item.ip)}</span>
-                    ${item.org ? `<span class="geo-asn-tag">${escapeHtml(item.org.slice(0, 16))}</span>` : ''}
+                    ${item.org ? `<span class="geo-asn-tag">(${escapeHtml(item.org.slice(0, 16))})</span>` : ''}
                 </span>
             `).join(" ") || c.answers.join(", ");
 
@@ -1021,7 +1002,6 @@ async function fetchAndRenderWirePacket(domain, qtype) {
                             <strong>${escapeHtml(ans.name)}</strong>
                         </div>
                         <div style="display:flex;align-items:center;gap:8px;">
-                            ${geo.flag ? `<span class="flag-emoji">${geo.flag}</span>` : ''}
                             <span class="rr-data-val">${escapeHtml(ans.data)}</span>
                             ${geo.org ? `<span style="font-size:0.7rem;color:var(--text-muted)">(${escapeHtml(geo.org)})</span>` : ''}
                             <span class="mono-badge">TTL: ${ans.ttl}s</span>
