@@ -143,3 +143,4 @@ class WirePacketInspector:
 
 # Global singleton instance
 wire_inspector = WirePacketInspector()
+
