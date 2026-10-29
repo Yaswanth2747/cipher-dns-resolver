@@ -102,32 +102,43 @@ class DNSServer:
         """Starts the UDP DNS listener. Returns actual bound port."""
         loop = asyncio.get_running_loop()
 
-        try:
-            transport, _ = await loop.create_datagram_endpoint(
-                lambda: DNSProtocol(self),
-                local_addr=(self.host, self.port),
-            )
-            self.transport = transport
-            self.actual_port = self.port
-            self.is_running = True
-            logger.info(f"cipherDNS server listening on {self.host}:{self.actual_port}")
-            return self.actual_port
-        except (PermissionError, OSError) as e:
-            # Fallback for unprivileged or already bound runs
-            fallback_port = 5300 if self.port in (53, 5353) else self.port + 1000
-            logger.warning(
-                f"Cannot bind to port {self.port} ({e}). "
-                f"Falling back to unprivileged port {fallback_port}."
-            )
-            transport, _ = await loop.create_datagram_endpoint(
-                lambda: DNSProtocol(self),
-                local_addr=(self.host, fallback_port),
-            )
-            self.transport = transport
-            self.actual_port = fallback_port
-            self.is_running = True
-            logger.info(f"cipherDNS server listening on {self.host}:{self.actual_port} (Fallback)")
-            return self.actual_port
+        # Try desired host & port, and candidate fallback (e.g. 127.0.0.1:53 if 0.0.0.0:53 is occupied by systemd-resolved)
+        candidates = [(self.host, self.port)]
+        if self.host == "0.0.0.0" and self.port == 53:
+            candidates.append(("127.0.0.1", 53))
+
+        last_error = None
+        for host, port in candidates:
+            try:
+                transport, _ = await loop.create_datagram_endpoint(
+                    lambda: DNSProtocol(self),
+                    local_addr=(host, port),
+                )
+                self.transport = transport
+                self.host = host
+                self.actual_port = port
+                self.is_running = True
+                logger.info(f"cipherDNS server listening on {self.host}:{self.actual_port}")
+                return self.actual_port
+            except (PermissionError, OSError) as e:
+                last_error = e
+                continue
+
+        # Fallback for unprivileged or unavailable port
+        fallback_port = 5300 if self.port in (53, 5353) else self.port + 1000
+        logger.warning(
+            f"Cannot bind to port {self.port} on {self.host} ({last_error}). "
+            f"Falling back to unprivileged port {fallback_port}."
+        )
+        transport, _ = await loop.create_datagram_endpoint(
+            lambda: DNSProtocol(self),
+            local_addr=(self.host, fallback_port),
+        )
+        self.transport = transport
+        self.actual_port = fallback_port
+        self.is_running = True
+        logger.info(f"cipherDNS server listening on {self.host}:{self.actual_port} (Fallback)")
+        return self.actual_port
 
     async def stop(self):
         """Stops the DNS listener and closes resources."""

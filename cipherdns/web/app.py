@@ -101,9 +101,9 @@ async def index_page(request: Request):
     """Renders the main dashboard."""
     status = dns_server.get_status() if dns_server else {}
     return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
+        request=request,
+        name="index.html",
+        context={
             "providers": DOH_PROVIDERS,
             "status": status,
         },
@@ -240,3 +240,4 @@ async def get_tls_evidence():
         None, dns_server.doh_client.get_tls_certificate_evidence
     )
     return JSONResponse(evidence)
+
