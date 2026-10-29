@@ -21,6 +21,9 @@ from cipherdns.core.server import DNSServer
 from cipherdns.core.cache import DNSCache
 from cipherdns.core.doh_client import DoHClient
 from cipherdns.analysis.zeek_analyzer import ZeekAnalyzer
+from cipherdns.core.benchmark import SpeedDuelBenchmark
+from cipherdns.core.wire_inspector import wire_inspector
+from cipherdns.core.geoip import geoip_resolver
 from cipherdns.core.system_dns import (
     get_system_dns_status,
     enable_system_dns,
@@ -233,6 +236,63 @@ async def run_zeek_audit(payload: ZeekAuditPayload):
     loop = asyncio.get_running_loop()
     report = await loop.run_in_executor(None, zeek_analyzer.audit_privacy_comparison, domain)
     return JSONResponse(report)
+
+
+class BenchmarkPayload(BaseModel):
+    domain: str = "netflix.com"
+
+
+@app.post("/api/benchmark")
+async def run_benchmark(payload: BenchmarkPayload):
+    """Runs concurrent upstream speed duel across providers."""
+    if not dns_server:
+        return JSONResponse({"error": "DNS Server not initialized"}, status_code=500)
+    domain = payload.domain.strip() or "netflix.com"
+    bench = SpeedDuelBenchmark(dns_server.cache, dns_server.doh_client)
+    report = await bench.run_duel(domain)
+    return JSONResponse(report)
+
+
+@app.get("/api/packet/inspect")
+async def inspect_packet(domain: str = "netflix.com", qtype: str = "A"):
+    """Returns RFC 1035 wire hex dump and dissected fields for in-browser Mini-Wireshark drawer."""
+    if not dns_server:
+        return JSONResponse({"error": "DNS Server not initialized"}, status_code=500)
+
+    clean_domain = domain.strip().rstrip(".").lower()
+    qtype_int = dns.rdatatype.from_text(qtype.upper())
+
+    # 1. Try to find cached entry with raw wire
+    entry = dns_server.cache.get_entry(clean_domain, qtype_int)
+    prov_info = dns_server.doh_client.get_provider_info()
+
+    if entry and entry.raw_wire:
+        try:
+            msg = dns.message.from_wire(entry.raw_wire)
+            dissection = wire_inspector.inspect_message(msg, entry.raw_wire, prov_info)
+            dissection["source"] = "LOCAL_CACHE"
+            dissection["domain"] = clean_domain
+            return JSONResponse(dissection)
+        except Exception:
+            pass
+
+    # 2. If not cached, query upstream DoH to get real response wire bytes
+    q_msg = dns.message.make_query(clean_domain, qtype_int)
+    q_msg.id = 42150
+    prov_info = dns_server.doh_client.get_provider_info()
+
+    resp_msg, raw_wire, _, _ = await dns_server.doh_client.query(q_msg.to_wire(), query_id=q_msg.id)
+    if resp_msg and raw_wire:
+        dissection = wire_inspector.inspect_message(resp_msg, raw_wire, prov_info)
+        dissection["source"] = "LIVE_DOH"
+        dissection["domain"] = clean_domain
+        return JSONResponse(dissection)
+
+    # Fallback to inspecting query
+    dissection = wire_inspector.inspect_message(q_msg, q_msg.to_wire(), prov_info)
+    dissection["source"] = "SYNTHESIZED_QUERY"
+    dissection["domain"] = clean_domain
+    return JSONResponse(dissection)
 
 
 @app.get("/api/tls/evidence")

@@ -11,6 +11,7 @@ import dns.rdatatype
 import dns.rcode
 
 from cipherdns.config import CACHE_MAX_ENTRIES, MIN_CACHE_TTL, MAX_CACHE_TTL
+from cipherdns.core.geoip import geoip_resolver
 
 
 class CacheEntry:
@@ -55,16 +56,30 @@ class CacheEntry:
         return time.time() >= self.expires_at
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serializes entry for the web frontend."""
+        """Serializes entry for the web frontend with GeoIP and country flags."""
         rem_ttl = self.remaining_ttl
         pct = 0
         if self.original_ttl > 0:
             pct = max(0, min(100, int((rem_ttl / self.original_ttl) * 100)))
 
+        enriched = []
+        for ans in self.answers:
+            geo = geoip_resolver.resolve(ans) if self.qtype_name == "A" else {}
+            enriched.append({
+                "ip": ans,
+                "country": geo.get("country", ""),
+                "country_code": geo.get("country_code", ""),
+                "flag": geo.get("flag", "🌐"),
+                "org": geo.get("org", ""),
+                "as": geo.get("as", ""),
+                "city": geo.get("city", ""),
+            })
+
         return {
             "domain": self.qname,
             "type": self.qtype_name,
             "answers": self.answers,
+            "enriched_answers": enriched,
             "remaining_ttl": rem_ttl,
             "original_ttl": self.original_ttl,
             "ttl_percent": pct,
@@ -138,6 +153,20 @@ class DNSCache:
                     wire[1] = query_id & 0xFF
                     return True, bytes(wire), rem_ttl, entry.answers
                 return False, None, 0, []
+
+    def get_entry(self, qname: str, qtype: int = 1, qclass: int = 1) -> Optional[CacheEntry]:
+        """Returns the CacheEntry object if present and unexpired."""
+        key = self._normalize_key(qname, qtype, qclass)
+        with self._lock:
+            entry = self._cache.get(key)
+            if entry and not entry.is_expired:
+                return entry
+            return None
+
+    def get_raw_wire(self, qname: str, qtype: int = 1, qclass: int = 1) -> Optional[bytes]:
+        """Returns stored raw wire bytes for packet inspection."""
+        entry = self.get_entry(qname, qtype, qclass)
+        return entry.raw_wire if entry else None
 
     def put(
         self,

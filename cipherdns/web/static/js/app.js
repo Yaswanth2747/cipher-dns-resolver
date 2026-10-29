@@ -436,9 +436,22 @@ function renderCacheTable(entries) {
     let html = "";
     filtered.forEach(entry => {
         const statusClass = entry.status === "expired" ? "expired" : (entry.status === "expiring" ? "expiring" : "active");
-        const ipsHtml = entry.answers && entry.answers.length > 0
-            ? entry.answers.map(ans => `<span class="ip-badge">${escapeHtml(ans)}</span>`).join("")
-            : `<span class="ip-badge" style="color:var(--text-muted)">NXDOMAIN</span>`;
+        
+        // GeoIP & Country Flag Answer Rendering
+        let ipsHtml = "";
+        if (entry.enriched_answers && entry.enriched_answers.length > 0) {
+            ipsHtml = entry.enriched_answers.map(ea => `
+                <span class="ip-geo-badge" title="${escapeHtml(ea.org || ea.country || 'Host IP')} • ${escapeHtml(ea.city || '')}">
+                    <span class="flag-emoji">${ea.flag || '🌐'}</span>
+                    <span>${escapeHtml(ea.ip)}</span>
+                    ${ea.org ? `<span class="geo-asn-tag">${escapeHtml(ea.org.slice(0, 16))}</span>` : ''}
+                </span>
+            `).join("");
+        } else if (entry.answers && entry.answers.length > 0) {
+            ipsHtml = entry.answers.map(ans => `<span class="ip-badge">${escapeHtml(ans)}</span>`).join("");
+        } else {
+            ipsHtml = `<span class="ip-badge" style="color:var(--text-muted)">NXDOMAIN</span>`;
+        }
 
         // App badge
         let appBadge = '<span class="app-tag tag-web">Web / User</span>';
@@ -456,11 +469,11 @@ function renderCacheTable(entries) {
         html += `
             <tr data-domain="${escapeHtml(entry.domain)}">
                 <td class="domain-cell">
-                    <span>${escapeHtml(entry.domain)}</span>
+                    <span class="domain-name-link" onclick="openWireDrawer('${escapeHtml(entry.domain)}', '${escapeHtml(entry.type)}')">${escapeHtml(entry.domain)}</span>
                 </td>
                 <td>${appBadge}</td>
                 <td><span class="record-type-badge">${escapeHtml(entry.type)}</span></td>
-                <td><div class="ip-list">${ipsHtml}</div></td>
+                <td><div class="answer-tag-list">${ipsHtml}</div></td>
                 <td>
                     <div class="ttl-container">
                         <div class="ttl-text">
@@ -472,9 +485,13 @@ function renderCacheTable(entries) {
                         </div>
                     </div>
                 </td>
-                <td class="mono">${entry.original_ttl}s</td>
                 <td class="mono">${entry.hit_count}</td>
-                <td class="mono" style="color:var(--text-muted)">${entry.inserted_at_iso}</td>
+                <td>
+                    <button class="inspect-btn" onclick="openWireDrawer('${escapeHtml(entry.domain)}', '${escapeHtml(entry.type)}')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        Wire
+                    </button>
+                </td>
                 <td><span class="status-tag ${statusClass}">${escapeHtml(entry.status)}</span></td>
             </tr>
         `;
@@ -769,6 +786,264 @@ function closeSystemModal() {
 function formatAnswerSummary(answers) {
     if (!answers || answers.length === 0) return "NXDOMAIN";
     return answers.slice(0, 2).join(", ") + (answers.length > 2 ? ` (+${answers.length - 2} more)` : "");
+}
+
+// =========================================================================
+// UPSTREAM SPEED DUEL & BENCHMARK ARENA
+// =========================================================================
+function openSpeedDuelModal() {
+    document.getElementById("speedDuelModal").style.display = "flex";
+}
+
+function closeSpeedDuelModal() {
+    document.getElementById("speedDuelModal").style.display = "none";
+}
+
+async function runSpeedDuel() {
+    const input = document.getElementById("duelDomainInput");
+    const domain = input ? input.value.trim() : "netflix.com";
+
+    const loading = document.getElementById("duelLoading");
+    const results = document.getElementById("duelResultsArea");
+    const btn = document.getElementById("btnExecuteSpeedDuel");
+
+    loading.style.display = "flex";
+    results.style.display = "none";
+    btn.disabled = true;
+
+    try {
+        const res = await fetch("/api/benchmark", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain: domain }),
+        });
+        const data = await res.json();
+
+        // 1. Render Winner Banner
+        const banner = document.getElementById("duelWinnerBanner");
+        banner.innerHTML = `
+            <div>
+                🏆 Winner: <strong>${escapeHtml(data.winner_name)}</strong> 
+                <span class="mono-badge">${data.winner_latency_ms} ms</span>
+            </div>
+            <div style="font-size: 0.82rem; color: var(--accent-emerald);">
+                ${escapeHtml(data.speedup_summary || 'Fastest delivery measured')}
+            </div>
+        `;
+
+        // 2. Render Race Bars
+        const barsContainer = document.getElementById("duelBarsContainer");
+        const contestants = data.contestants || [];
+        const maxLatency = Math.max(...contestants.map(c => c.latency_ms || 1), 40);
+
+        let barsHtml = "";
+        contestants.forEach(c => {
+            const isWinner = c.name === data.winner_name;
+            const pct = Math.max(5, Math.min(100, (c.latency_ms / maxLatency) * 100));
+            barsHtml += `
+                <div class="duel-bar-row ${isWinner ? 'winner' : ''}">
+                    <div class="duel-bar-header">
+                        <span class="duel-bar-title">
+                            <span>${c.icon || '🌐'}</span>
+                            <span>${escapeHtml(c.name)}</span>
+                            ${isWinner ? '<span class="badge badge-success">🥇 1st Place</span>' : ''}
+                        </span>
+                        <span class="duel-bar-metric" style="color: ${isWinner ? 'var(--accent-emerald)' : 'var(--text-primary)'}">
+                            ${c.latency_ms} ms
+                        </span>
+                    </div>
+                    <div class="duel-bar-track">
+                        <div class="duel-bar-fill ${c.badge_color || 'cyan'}" style="width: ${pct}%"></div>
+                    </div>
+                </div>
+            `;
+        });
+        barsContainer.innerHTML = barsHtml;
+
+        // 3. Render Table
+        const tableBody = document.getElementById("duelTableBody");
+        let tableHtml = "";
+        contestants.forEach(c => {
+            const enrichedIps = (c.enriched_ips || []).map(item => `
+                <span class="ip-geo-badge" title="${escapeHtml(item.org || item.country || '')}">
+                    <span class="flag-emoji">${item.flag || '🌐'}</span>
+                    <span>${escapeHtml(item.ip)}</span>
+                    ${item.org ? `<span class="geo-asn-tag">${escapeHtml(item.org.slice(0, 16))}</span>` : ''}
+                </span>
+            `).join(" ") || c.answers.join(", ");
+
+            tableHtml += `
+                <tr>
+                    <td><strong>${c.icon || ''} ${escapeHtml(c.name)}</strong><br/><span style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(c.provider)}</span></td>
+                    <td><span class="record-type-badge">${escapeHtml(c.protocol)}</span><br/><span style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(c.encryption)}</span></td>
+                    <td><span class="mono" style="font-weight:700;color:${c.name === data.winner_name ? 'var(--accent-emerald)' : 'var(--accent-cyan)'}">${c.latency_ms} ms</span></td>
+                    <td><div class="answer-tag-list">${enrichedIps}</div></td>
+                </tr>
+            `;
+        });
+        tableBody.innerHTML = tableHtml;
+
+        loading.style.display = "none";
+        results.style.display = "block";
+    } catch (e) {
+        alert("Speed duel error: " + e.message);
+        loading.style.display = "none";
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// =========================================================================
+// MINI-WIRESHARK RFC 1035 WIRE PACKET INSPECTOR DRAWER
+// =========================================================================
+function openWireDrawer(domain, qtype) {
+    const targetDomain = domain || "netflix.com";
+    const targetType = qtype || "A";
+
+    const backdrop = document.getElementById("wireDrawerBackdrop");
+    const drawer = document.getElementById("wireDrawer");
+    const titleSub = document.getElementById("wireTargetDomain");
+
+    if (titleSub) titleSub.textContent = `${targetDomain} (IN ${targetType})`;
+    backdrop.style.display = "block";
+    drawer.classList.add("open");
+
+    fetchAndRenderWirePacket(targetDomain, targetType);
+}
+
+function closeWireDrawer() {
+    const backdrop = document.getElementById("wireDrawerBackdrop");
+    const drawer = document.getElementById("wireDrawer");
+    if (backdrop) backdrop.style.display = "none";
+    if (drawer) drawer.classList.remove("open");
+}
+
+async function fetchAndRenderWirePacket(domain, qtype) {
+    const loading = document.getElementById("wireLoading");
+    const content = document.getElementById("wireContentArea");
+
+    loading.style.display = "flex";
+    content.style.display = "none";
+
+    try {
+        const res = await fetch(`/api/packet/inspect?domain=${encodeURIComponent(domain)}&qtype=${encodeURIComponent(qtype || 'A')}`);
+        const data = await res.json();
+
+        // 1. DoH Framing
+        const dohCard = document.getElementById("wireDohCard");
+        if (dohCard && data.doh_framing) {
+            const doh = data.doh_framing;
+            dohCard.innerHTML = `
+                <div class="section-card-header">
+                    <span class="section-card-title">RFC 8484 DNS-over-HTTPS (DoH) Frame Encapsulation</span>
+                    <span class="wire-badge-cyan">${escapeHtml(doh.http_version)} • ${escapeHtml(doh.transport_security)}</span>
+                </div>
+                <div style="font-size: 0.78rem; font-family: var(--font-mono); color: #cbd5e1; display:flex; flex-direction:column; gap:4px;">
+                    <div><span style="color:var(--text-muted)">Upstream Endpoint:</span> https://${escapeHtml(doh.pseudo_headers[':authority'])}${escapeHtml(doh.pseudo_headers[':path'])}</div>
+                    <div><span style="color:var(--text-muted)">HTTP/2 Headers:</span> :method: POST | content-type: application/dns-message | accept: application/dns-message</div>
+                    <div><span style="color:var(--text-muted)">TLS Record Layer:</span> ${escapeHtml(doh.tls_record.record_type)} | ${escapeHtml(doh.tls_record.encryption)}</div>
+                </div>
+            `;
+        }
+
+        // 2. Header & Bit Flags
+        const txBadge = document.getElementById("wireTxIdBadge");
+        if (txBadge) txBadge.textContent = `TxID: ${data.header.transaction_id_hex} (${data.header.transaction_id_dec})`;
+
+        const sizeBadge = document.getElementById("wireSizeBytesBadge");
+        if (sizeBadge) sizeBadge.textContent = `${data.header.wire_size_bytes} bytes on wire`;
+
+        const flagsGrid = document.getElementById("wireFlagsGrid");
+        if (flagsGrid) {
+            const h = data.header;
+            flagsGrid.innerHTML = `
+                <div class="dns-flag-chip">
+                    <span class="flag-chip-label">QR (Query/Response)</span>
+                    <span class="flag-chip-val" style="color: ${h.qr ? 'var(--accent-emerald)' : 'var(--accent-cyan)'}">${h.qr_desc}</span>
+                </div>
+                <div class="dns-flag-chip">
+                    <span class="flag-chip-label">Opcode</span>
+                    <span class="flag-chip-val">${h.opcode_name} (${h.opcode})</span>
+                </div>
+                <div class="dns-flag-chip">
+                    <span class="flag-chip-label">RCODE (Return Code)</span>
+                    <span class="flag-chip-val" style="color: ${h.rcode === 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'}">${h.rcode_name} (${h.rcode})</span>
+                </div>
+                <div class="dns-flag-chip">
+                    <span class="flag-chip-label">RD (Recursion Desired)</span>
+                    <span class="flag-chip-val">${h.rd ? 'Set (1)' : '0'}</span>
+                </div>
+                <div class="dns-flag-chip">
+                    <span class="flag-chip-label">RA (Recursion Avail)</span>
+                    <span class="flag-chip-val">${h.ra ? 'Set (1)' : '0'}</span>
+                </div>
+                <div class="dns-flag-chip">
+                    <span class="flag-chip-label">AA (Authoritative)</span>
+                    <span class="flag-chip-val">${h.aa ? 'Authoritative (1)' : 'Non-auth (0)'}</span>
+                </div>
+                <div class="dns-flag-chip">
+                    <span class="flag-chip-label">TC (Truncated)</span>
+                    <span class="flag-chip-val">${h.tc ? 'Yes (1)' : 'No (0)'}</span>
+                </div>
+                <div class="dns-flag-chip">
+                    <span class="flag-chip-label">Question Count</span>
+                    <span class="flag-chip-val">${h.qdcount}</span>
+                </div>
+                <div class="dns-flag-chip">
+                    <span class="flag-chip-label">Answer RR Count</span>
+                    <span class="flag-chip-val">${h.ancount}</span>
+                </div>
+            `;
+        }
+
+        // 3. Questions & Answers Section
+        const rrTree = document.getElementById("wireRrTree");
+        if (rrTree) {
+            let treeHtml = "";
+            (data.questions || []).forEach(q => {
+                treeHtml += `
+                    <div class="rr-node">
+                        <div class="rr-name-type">
+                            <span class="rr-type-badge">QUESTION</span>
+                            <strong>${escapeHtml(q.name)}</strong>
+                        </div>
+                        <span style="color:var(--text-muted)">Type: ${escapeHtml(q.type)} • Class: ${escapeHtml(q.class)}</span>
+                    </div>
+                `;
+            });
+
+            (data.answers || []).forEach(ans => {
+                const geo = ans.geoip || {};
+                treeHtml += `
+                    <div class="rr-node">
+                        <div class="rr-name-type">
+                            <span class="rr-type-badge" style="background:rgba(16,185,129,0.15);color:var(--accent-emerald);">ANSWER</span>
+                            <strong>${escapeHtml(ans.name)}</strong>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            ${geo.flag ? `<span class="flag-emoji">${geo.flag}</span>` : ''}
+                            <span class="rr-data-val">${escapeHtml(ans.data)}</span>
+                            ${geo.org ? `<span style="font-size:0.7rem;color:var(--text-muted)">(${escapeHtml(geo.org)})</span>` : ''}
+                            <span class="mono-badge">TTL: ${ans.ttl}s</span>
+                        </div>
+                    </div>
+                `;
+            });
+            rrTree.innerHTML = treeHtml || '<div style="color:var(--text-muted);font-size:0.78rem;">No answer records in this datagram.</div>';
+        }
+
+        // 4. Hexdump Viewer
+        const hexdump = document.getElementById("wireHexdumpViewer");
+        if (hexdump) hexdump.textContent = data.wire_hex || "# Raw wire bytes unavailable";
+
+        loading.style.display = "none";
+        content.style.display = "flex";
+        content.style.flexDirection = "column";
+        content.style.gap = "16px";
+    } catch (e) {
+        alert("Error inspecting packet: " + e.message);
+        loading.style.display = "none";
+    }
 }
 
 function escapeHtml(str) {

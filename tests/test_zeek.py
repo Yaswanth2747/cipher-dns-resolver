@@ -57,3 +57,4 @@ def test_zeek_privacy_comparison_with_response_ips_and_tls():
 
     # Verdict
     assert "PASS" in report["verdict"]
+

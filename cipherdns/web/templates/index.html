@@ -155,11 +155,17 @@
                 </div>
             </div>
             <div class="metric-card action-card">
-                <span class="metric-label">Privacy & Security Audit</span>
-                <button class="secondary-btn zeek-btn" onclick="openZeekModal()">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-                    Run Zeek Packet Audit
-                </button>
+                <span class="metric-label">Security & Performance Arena</span>
+                <div class="action-buttons-row">
+                    <button class="secondary-btn duel-btn" onclick="openSpeedDuelModal()" title="Run live multi-resolver latency benchmark">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        Speed Duel
+                    </button>
+                    <button class="secondary-btn zeek-btn" onclick="openZeekModal()" title="Run Zeek network privacy audit">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                        Zeek Audit
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -199,11 +205,10 @@
                                 <th>Domain Name</th>
                                 <th>App / Source</th>
                                 <th>Type</th>
-                                <th>Resolved Answer / IPs</th>
+                                <th>Resolved Answer / IPs & GeoIP</th>
                                 <th>Remaining TTL</th>
-                                <th>Original TTL</th>
                                 <th>Hits</th>
-                                <th>Cached At</th>
+                                <th>Wire Inspect</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -374,6 +379,112 @@
                             <div class="risk-note" id="dohSecurityNote"></div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upstream Speed Duel & Benchmark Modal -->
+    <div class="modal-backdrop" id="speedDuelModal">
+        <div class="modal-dialog duel-modal-dialog">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <div class="modal-icon duel-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="modal-title">Upstream Resolver Speed Duel & Latency Arena</h3>
+                        <p class="modal-desc">Concurrent race: Local Cache vs Cloudflare DoH vs Google DoH vs Quad9 vs Plaintext</p>
+                    </div>
+                </div>
+                <button class="close-btn" onclick="closeSpeedDuelModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-input-row">
+                    <label>Domain to Benchmark:</label>
+                    <input type="text" id="duelDomainInput" value="netflix.com" placeholder="netflix.com">
+                    <button class="primary-btn duel-run-btn" id="btnExecuteSpeedDuel" onclick="runSpeedDuel()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Start Speed Duel
+                    </button>
+                </div>
+
+                <div id="duelLoading" class="zeek-loading-state" style="display: none;">
+                    <div class="spinner-small duel-spinner"></div>
+                    <span>Dispatching concurrent queries across resolvers and measuring microsecond round trips...</span>
+                </div>
+
+                <div id="duelResultsArea" style="display: none;">
+                    <div class="duel-winner-banner" id="duelWinnerBanner"></div>
+                    <div class="duel-bars-container" id="duelBarsContainer"></div>
+                    <div class="duel-table-card">
+                        <table class="duel-table">
+                            <thead>
+                                <tr>
+                                    <th>Resolver / Contestant</th>
+                                    <th>Protocol & Encryption</th>
+                                    <th>Latency</th>
+                                    <th>Resolved Answer IPs & GeoIP</th>
+                                </tr>
+                            </thead>
+                            <tbody id="duelTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mini-Wireshark RFC 1035 Wire & Hex Packet Inspector Drawer -->
+    <div class="wire-drawer-backdrop" id="wireDrawerBackdrop" onclick="closeWireDrawer()"></div>
+    <div class="wire-drawer" id="wireDrawer">
+        <div class="wire-drawer-header">
+            <div class="wire-drawer-title-row">
+                <div class="wire-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                </div>
+                <div>
+                    <h3 class="wire-drawer-title">RFC 1035 Wire & Hex Packet Inspector</h3>
+                    <span class="wire-drawer-sub" id="wireTargetDomain">netflix.com (IN A)</span>
+                </div>
+            </div>
+            <button class="close-btn" onclick="closeWireDrawer()">&times;</button>
+        </div>
+
+        <div class="wire-drawer-body">
+            <div id="wireLoading" class="zeek-loading-state" style="display: none;">
+                <div class="spinner-small"></div>
+                <span>Dissecting binary wire bytes and decoding RFC 1035 bit fields...</span>
+            </div>
+
+            <div id="wireContentArea">
+                <!-- DoH Framing Section -->
+                <div class="wire-section-card doh-framing-card" id="wireDohCard"></div>
+
+                <!-- DNS Header & Bit Flags -->
+                <div class="wire-section-card">
+                    <div class="section-card-header">
+                        <span class="section-card-title">DNS Header & Control Bit Flags (RFC 1035 §4.1.1)</span>
+                        <span class="wire-badge-cyan" id="wireTxIdBadge">ID: 0x0000</span>
+                    </div>
+                    <div class="dns-flags-grid" id="wireFlagsGrid"></div>
+                </div>
+
+                <!-- Question & Answer Records Section -->
+                <div class="wire-section-card">
+                    <div class="section-card-header">
+                        <span class="section-card-title">Dissected Resource Records (RR Section)</span>
+                    </div>
+                    <div class="rr-tree-container" id="wireRrTree"></div>
+                </div>
+
+                <!-- Raw Wire Hex & ASCII Dump -->
+                <div class="wire-section-card">
+                    <div class="section-card-header">
+                        <span class="section-card-title">Raw Binary Wire Datagram (Hex & ASCII Dump)</span>
+                        <span class="wire-badge-dim" id="wireSizeBytesBadge">0 bytes</span>
+                    </div>
+                    <pre class="hexdump-viewer" id="wireHexdumpViewer"></pre>
                 </div>
             </div>
         </div>
