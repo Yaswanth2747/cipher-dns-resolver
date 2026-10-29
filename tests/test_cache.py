@@ -112,3 +112,4 @@ def test_cache_clear():
     cleared = cache.clear()
     assert cleared == 1
     assert len(cache.get_entries()) == 0
+

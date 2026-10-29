@@ -68,3 +68,4 @@ class PlaintextClient:
         msg.flags |= dns.flags.QR
         msg.flags |= dns.flags.RA
         return msg
+

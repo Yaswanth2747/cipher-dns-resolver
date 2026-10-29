@@ -24,3 +24,4 @@ else
 fi
 
 echo "[cipherDNS] Default DNS restored."
+

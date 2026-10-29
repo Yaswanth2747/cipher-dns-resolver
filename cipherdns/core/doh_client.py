@@ -185,3 +185,4 @@ class DoHClient:
         if self._http_client and not self._http_client.is_closed:
             await self._http_client.aclose()
             self._http_client = None
+

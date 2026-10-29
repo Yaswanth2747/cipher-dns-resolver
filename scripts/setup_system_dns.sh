@@ -31,3 +31,4 @@ else
 fi
 
 echo "[cipherDNS] System DNS is now pointed to cipherDNS! Verify with: dig netflix.com"
+

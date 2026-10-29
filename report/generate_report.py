@@ -597,3 +597,4 @@ def build_pdf_report(filename=REPORT_OUTPUT_PATH):
 
 if __name__ == "__main__":
     build_pdf_report()
+

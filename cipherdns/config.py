@@ -68,3 +68,4 @@ ZEEK_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", 
 
 os.makedirs(PCAP_DIR, exist_ok=True)
 os.makedirs(ZEEK_LOG_DIR, exist_ok=True)
+

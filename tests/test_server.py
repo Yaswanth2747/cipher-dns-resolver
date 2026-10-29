@@ -78,3 +78,4 @@ async def test_server_mode_toggle():
     # Re-enable cipherDNS
     server.set_mode(True)
     assert server.cipher_mode_enabled is True
+

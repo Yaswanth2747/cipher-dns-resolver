@@ -234,3 +234,4 @@ class DNSCache:
                 "total_misses": self.total_misses,
                 "hit_ratio_pct": hit_ratio,
             }
+
