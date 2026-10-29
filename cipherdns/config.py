@@ -17,7 +17,7 @@ DOH_PROVIDERS: Dict[str, Dict[str, Any]] = {
     "cloudflare": {
         "name": "Cloudflare",
         "url": "https://cloudflare-dns.com/dns-query",
-        "bootstrap_ips": ["1.1.1.1", "1.0.0.1"],
+        "bootstrap_ips": ["104.16.248.249", "104.16.249.249", "1.1.1.1", "1.0.0.1"],
         "description": "Privacy-first resolver (1.1.1.1) with global Anycast routing.",
         "icon": "cloudflare",
     },

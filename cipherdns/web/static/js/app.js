@@ -8,6 +8,7 @@ let reconnectTimer = null;
 let idleResetTimer = null;
 let currentCacheEntries = [];
 let localTtlInterval = null;
+let currentTrafficScope = "clean"; // default: Clean Demo (User Sites)
 
 // DOM Elements
 const statusRing = document.getElementById("statusRing");
@@ -18,6 +19,7 @@ const activeProviderText = document.getElementById("activeProviderText");
 const portBadge = document.getElementById("portBadge");
 const wsStatusPill = document.getElementById("wsStatusPill");
 const wsStatusText = document.getElementById("wsStatusText");
+const scopeFilterSelect = document.getElementById("scopeFilterSelect");
 
 const btnModeDoh = document.getElementById("btnModeDoh");
 const btnModePlain = document.getElementById("btnModePlain");
@@ -131,8 +133,47 @@ function handleServerEvent(event) {
     }
 }
 
+// Traffic Scope Filtering
+function matchesTrafficScope(item) {
+    if (!item) return false;
+    const cat = item.category || "web";
+    const app = (item.source_app || "").toLowerCase();
+    const domain = (item.domain || "").toLowerCase();
+
+    const isSystemNoise = cat === "system" || 
+        domain.includes("ubuntu.com") || 
+        domain.includes("canonical.com") || 
+        domain.includes("snapcraft.io") || 
+        domain.includes(".arpa") || 
+        domain.includes("connectivity-check") || 
+        domain.includes("detectportal") ||
+        domain.includes(".local") ||
+        domain.includes(".lan") ||
+        domain.includes(".home") ||
+        domain.includes("ntp.org") ||
+        domain.includes("wsdd");
+
+    if (currentTrafficScope === "all") {
+        return true;
+    } else if (currentTrafficScope === "clean") {
+        return !isSystemNoise;
+    } else if (currentTrafficScope === "chrome") {
+        return (app.includes("chrome") || app.includes("browser") || (!isSystemNoise && app !== "curl" && app !== "wget"));
+    } else if (currentTrafficScope === "cli") {
+        return (app.includes("curl") || app.includes("wget") || cat === "cli");
+    }
+    return true;
+}
+
+function changeTrafficScope(scope) {
+    currentTrafficScope = scope;
+    if (scopeFilterSelect) scopeFilterSelect.value = scope;
+    renderCacheTable(currentCacheEntries);
+}
+
 // State 1: Query Initiated
 function onQueryStart(event) {
+    if (!matchesTrafficScope(event)) return; // Ignore noise in status ring
     if (idleResetTimer) clearTimeout(idleResetTimer);
 
     statusRing.className = "status-ring loading";
@@ -150,43 +191,45 @@ function onQueryStart(event) {
 
 // State 2: Query Completed
 function onQueryResolved(event) {
-    if (idleResetTimer) clearTimeout(idleResetTimer);
+    if (matchesTrafficScope(event)) {
+        if (idleResetTimer) clearTimeout(idleResetTimer);
 
-    if (event.action === "CACHE_HIT") {
-        // Cache Hit
-        statusRing.className = "status-ring cache-hit";
-        ringIcon.innerHTML = `
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-            </svg>
-        `;
-        statusPrimaryText.textContent = `Successfully delivered the cached entry for ${event.domain}`;
-        statusPrimaryText.style.color = "var(--accent-emerald)";
-        statusSecondaryText.innerHTML = `Served from local memory • Latency: <span class="mono-badge">${event.latency_ms} ms</span> • Remaining TTL: <span class="mono-badge">${event.remaining_ttl}s</span>`;
-    } else {
-        // DoH or Plaintext Resolve
-        const isDoh = event.action === "DOH_RESOLVE";
-        statusRing.className = isDoh ? "status-ring doh-success" : "status-ring idle";
-        ringIcon.innerHTML = `
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                <polyline points="9 12 11 14 15 10"/>
-            </svg>
-        `;
-
-        if (event.error) {
-            statusPrimaryText.textContent = `Resolution Error: ${event.domain}`;
-            statusPrimaryText.style.color = "var(--accent-rose)";
-            statusSecondaryText.textContent = event.error;
+        if (event.action === "CACHE_HIT") {
+            // Cache Hit
+            statusRing.className = "status-ring cache-hit";
+            ringIcon.innerHTML = `
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                </svg>
+            `;
+            statusPrimaryText.textContent = `Successfully delivered the cached entry for ${event.domain}`;
+            statusPrimaryText.style.color = "var(--accent-emerald)";
+            statusSecondaryText.innerHTML = `Served from local memory • Latency: <span class="mono-badge">${event.latency_ms} ms</span> • Remaining TTL: <span class="mono-badge">${event.remaining_ttl}s</span>`;
         } else {
-            statusPrimaryText.textContent = `Securely retrieved IP for ${event.domain}`;
-            statusPrimaryText.style.color = isDoh ? "var(--accent-cyan)" : "var(--accent-amber)";
-            statusSecondaryText.innerHTML = `Upstream: <span class="provider-highlight">${event.provider || 'DoH'}</span> • Latency: <span class="mono-badge">${event.latency_ms} ms</span> • Result: ${formatAnswerSummary(event.answers)}`;
-        }
-    }
+            // DoH or Plaintext Resolve
+            const isDoh = event.action === "DOH_RESOLVE";
+            statusRing.className = isDoh ? "status-ring doh-success" : "status-ring idle";
+            ringIcon.innerHTML = `
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <polyline points="9 12 11 14 15 10"/>
+                </svg>
+            `;
 
-    // Schedule return to normal idle state
-    idleResetTimer = setTimeout(resetToIdleState, 3500);
+            if (event.error) {
+                statusPrimaryText.textContent = `Resolution Error: ${event.domain}`;
+                statusPrimaryText.style.color = "var(--accent-rose)";
+                statusSecondaryText.textContent = event.error;
+            } else {
+                statusPrimaryText.textContent = `Securely retrieved IP for ${event.domain}`;
+                statusPrimaryText.style.color = isDoh ? "var(--accent-cyan)" : "var(--accent-amber)";
+                statusSecondaryText.innerHTML = `Upstream: <span class="provider-highlight">${event.provider || 'DoH'}</span> • Latency: <span class="mono-badge">${event.latency_ms} ms</span> • Result: ${formatAnswerSummary(event.answers)}`;
+            }
+        }
+
+        // Schedule return to normal idle state
+        idleResetTimer = setTimeout(resetToIdleState, 3500);
+    }
 }
 
 // State 3: Reset to Normal Idle State
@@ -367,18 +410,22 @@ async function reloadCacheTable(showReloadAnimation = true) {
 function renderCacheTable(entries) {
     currentCacheEntries = entries;
     const filter = (cacheSearchInput ? cacheSearchInput.value : "").trim().toLowerCase();
-    const filtered = filter ? entries.filter(e => e.domain.includes(filter)) : entries;
 
-    tableCountBadge.textContent = `${entries.length} entries`;
-    metricCachedEntries.textContent = entries.length;
+    // 1. Filter by active traffic scope
+    const scoped = entries.filter(matchesTrafficScope);
+    // 2. Filter by search input
+    const filtered = filter ? scoped.filter(e => e.domain.includes(filter)) : scoped;
+
+    tableCountBadge.textContent = `${filtered.length} entries (${entries.length} total)`;
+    metricCachedEntries.textContent = filtered.length;
 
     if (filtered.length === 0) {
         cacheTableBody.innerHTML = `
             <tr class="empty-row">
-                <td colspan="8">
+                <td colspan="9">
                     <div class="empty-state">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                        <span>${filter ? "No domains matching '" + filter + "'" : "No cached entries yet. Make a request to netflix.com above!"}</span>
+                        <span>${filter ? "No domains matching '" + filter + "'" : "No cached entries matching scope '" + currentTrafficScope + "'. Make a request or try netflix.com above!"}</span>
                     </div>
                 </td>
             </tr>
@@ -393,11 +440,25 @@ function renderCacheTable(entries) {
             ? entry.answers.map(ans => `<span class="ip-badge">${escapeHtml(ans)}</span>`).join("")
             : `<span class="ip-badge" style="color:var(--text-muted)">NXDOMAIN</span>`;
 
+        // App badge
+        let appBadge = '<span class="app-tag tag-web">Web / User</span>';
+        const appName = (entry.source_app || '').toLowerCase();
+        if (appName.includes('chrome')) {
+            appBadge = '<span class="app-tag tag-chrome">Chrome</span>';
+        } else if (appName.includes('curl')) {
+            appBadge = '<span class="app-tag tag-cli">curl</span>';
+        } else if (appName.includes('wget')) {
+            appBadge = '<span class="app-tag tag-cli">wget</span>';
+        } else if (entry.category === 'system' || entry.domain.includes('ubuntu') || entry.domain.includes('arpa')) {
+            appBadge = '<span class="app-tag tag-system">OS Daemon</span>';
+        }
+
         html += `
             <tr data-domain="${escapeHtml(entry.domain)}">
                 <td class="domain-cell">
                     <span>${escapeHtml(entry.domain)}</span>
                 </td>
+                <td>${appBadge}</td>
                 <td><span class="record-type-badge">${escapeHtml(entry.type)}</span></td>
                 <td><div class="ip-list">${ipsHtml}</div></td>
                 <td>
@@ -510,6 +571,8 @@ async function executeManualQuery() {
 
 // Live Stream Log Appender
 function appendLogEntry(event) {
+    if (!matchesTrafficScope(event)) return; // Ignore background noise in live stream
+
     if (logEmptyState && logEmptyState.style.display !== "none") {
         logEmptyState.style.display = "none";
     }

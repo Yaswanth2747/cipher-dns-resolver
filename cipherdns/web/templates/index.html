@@ -58,6 +58,20 @@
                     </div>
                 </div>
 
+                <!-- Traffic Scope Mode Selector -->
+                <div class="control-group">
+                    <label class="control-label">Traffic Scope</label>
+                    <div class="select-wrapper">
+                        <select id="scopeFilterSelect" onchange="changeTrafficScope(this.value)" style="border-color:var(--accent-cyan);font-weight:600;">
+                            <option value="clean" selected>⭐ Clean Demo (User Sites)</option>
+                            <option value="all">🌐 Complete PC Takeover (All)</option>
+                            <option value="chrome">🦊 Only Chrome / Browsers</option>
+                            <option value="cli">💻 Only curl / wget (CLI)</option>
+                        </select>
+                        <svg class="select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                </div>
+
                 <!-- Laptop DNS Capture Pill / Button -->
                 <div class="control-group">
                     <label class="control-label">Laptop Traffic</label>
@@ -183,6 +197,7 @@
                         <thead>
                             <tr>
                                 <th>Domain Name</th>
+                                <th>App / Source</th>
                                 <th>Type</th>
                                 <th>Resolved Answer / IPs</th>
                                 <th>Remaining TTL</th>

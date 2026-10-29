@@ -70,10 +70,30 @@ class DoHClient:
         url = provider["url"]
         client = await self._get_client()
 
+        # Extract hostname and path
+        host_and_path = url.split("://")[1]
+        hostname = host_and_path.split("/")[0]
+        path = "/" + host_and_path.split("/", 1)[1] if "/" in host_and_path else "/dns-query"
+        bootstrap_ips = provider.get("bootstrap_ips", [])
+
         start_time = time.perf_counter()
 
         try:
-            response = await client.post(url, content=wire_query)
+            # If bootstrap IP is configured, connect directly to IP with SNI extension
+            # to avoid recursive DNS lookup deadlocks when system DNS points to localhost
+            if bootstrap_ips:
+                target_url = f"https://{bootstrap_ips[0]}{path}"
+                req = client.build_request(
+                    "POST",
+                    target_url,
+                    content=wire_query,
+                    headers={"Host": hostname},
+                )
+                req.extensions["sni_hostname"] = hostname
+                response = await client.send(req)
+            else:
+                response = await client.post(url, content=wire_query)
+
             latency_ms = (time.perf_counter() - start_time) * 1000.0
 
             if response.status_code != 200:
@@ -133,6 +153,8 @@ class DoHClient:
         url = provider["url"]
         hostname = url.split("://")[1].split("/")[0]
         port = 443
+        bootstrap_ips = provider.get("bootstrap_ips", [])
+        connect_target = bootstrap_ips[0] if bootstrap_ips else hostname
 
         try:
             # Build verified SSL context
@@ -140,7 +162,7 @@ class DoHClient:
             context.check_hostname = True
             context.verify_mode = ssl.CERT_REQUIRED
 
-            with socket.create_connection((hostname, port), timeout=4.0) as sock:
+            with socket.create_connection((connect_target, port), timeout=4.0) as sock:
                 with context.wrap_socket(sock, server_hostname=hostname) as ssock:
                     cert = ssock.getpeercert()
                     cipher = ssock.cipher()

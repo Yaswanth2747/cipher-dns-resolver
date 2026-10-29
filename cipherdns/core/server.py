@@ -6,6 +6,7 @@ managing cache lookup, DoH forwarding, and real-time event broadcasting.
 
 import asyncio
 import logging
+import subprocess
 import time
 from typing import Optional, Callable, Dict, Any, List
 import dns.message
@@ -16,12 +17,49 @@ from cipherdns.config import (
     DEFAULT_DNS_HOST,
     DEFAULT_DNS_PORT,
     DEFAULT_DOH_PROVIDER,
+    DOH_PROVIDERS,
 )
 from cipherdns.core.cache import DNSCache
 from cipherdns.core.doh_client import DoHClient
 from cipherdns.core.plaintext_client import PlaintextClient
 
 logger = logging.getLogger("cipherdns.server")
+
+SYSTEM_PATTERNS = (
+    "ubuntu.com", "canonical.com", "snapcraft.io", "in-addr.arpa", "ip6.arpa",
+    ".local", "detectportal", "connectivitycheck", "msftncsi", "ntp.org",
+    "wsdd", ".lan", ".home", "whoopsie", "daemons"
+)
+
+
+def classify_query(qname: str, client_port: int) -> tuple[str, str]:
+    """Classifies query into category (web/cli/system) and identifies source application."""
+    domain = qname.lower().rstrip(".")
+    if any(pat in domain for pat in SYSTEM_PATTERNS):
+        return "system", "system"
+
+    # Fast port-to-process inspection via ss
+    try:
+        cmd = ["ss", "-u", "-a", "-p", "-n", f"sport = :{client_port}"]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=0.08)
+        for line in res.stdout.splitlines():
+            if 'users:((' in line:
+                p = line.split('users:(("')[1].split('"')[0].lower()
+                if "chrome" in p:
+                    return "web", "chrome"
+                elif "curl" in p:
+                    return "cli", "curl"
+                elif "wget" in p:
+                    return "cli", "wget"
+                elif any(x in p for x in ("firefox", "brave", "edge")):
+                    return "web", p
+                elif any(x in p for x in ("systemd", "snapd", "cupsd", "networkd", "avahi")):
+                    return "system", "system"
+                return "cli", p
+    except Exception:
+        pass
+
+    return "web", "browser"
 
 
 class DNSProtocol(asyncio.DatagramProtocol):
@@ -66,6 +104,20 @@ class DNSServer:
         self.is_running: bool = False
         self.transport: Optional[asyncio.DatagramTransport] = None
         self.query_history: List[Dict[str, Any]] = []
+        self._bootstrap_known_providers()
+
+    def _bootstrap_known_providers(self):
+        """Pre-populates cache with upstream DoH resolver bootstrap IPs to prevent recursion loops."""
+        for key, info in DOH_PROVIDERS.items():
+            hostname = info["url"].split("://")[1].split("/")[0]
+            ips = info.get("bootstrap_ips", [])
+            if ips:
+                msg = dns.message.make_response(dns.message.make_query(hostname, dns.rdatatype.A))
+                for ip in ips:
+                    rdata = dns.rdata.from_text(dns.rdataclass.IN, dns.rdatatype.A, ip)
+                    rrset = dns.rrset.from_rdata(dns.name.from_text(hostname), 86400, rdata)
+                    msg.answer.append(rrset)
+                self.cache.put(hostname, dns.rdatatype.A, 1, msg, msg.to_wire(), category="system", source_app="bootstrap")
 
     def set_mode(self, cipher_enabled: bool):
         """Toggles between cipherDNS (DoH) and Plaintext DNS mode."""
@@ -172,17 +224,18 @@ class DNSServer:
         qclass = question.rdclass
         query_id = req_msg.id
 
-        # 1. Check TTL Cache
+        # 1. Check TTL Cache first for instant <1ms response
         is_hit, cached_wire, rem_ttl, cached_answers = self.cache.get(
             qname, qtype, qclass, query_id
         )
 
         if is_hit and cached_wire is not None:
-            # Cache Hit!
-            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+            # Cache Hit! Immediately dispatch wire packet
             if transport and not transport.is_closing():
                 transport.sendto(cached_wire, addr)
+            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
+            category, source_app = classify_query(qname, client_port)
             event = {
                 "type": "query_resolved",
                 "action": "CACHE_HIT",
@@ -192,12 +245,17 @@ class DNSServer:
                 "latency_ms": round(elapsed_ms, 2),
                 "remaining_ttl": rem_ttl,
                 "client_ip": client_ip,
+                "category": category,
+                "source_app": source_app,
                 "timestamp": time.time(),
                 "message": f"Successfully delivered the cached entry for {qname}",
             }
             self._record_history(event)
             self._notify_event(event)
             return
+
+        # Classify query (web, cli, system)
+        category, source_app = classify_query(qname, client_port)
 
         # 2. Cache Miss: Initiate Upstream Query
         provider_name = (
@@ -213,6 +271,8 @@ class DNSServer:
             "qtype": qtype_name,
             "client_ip": client_ip,
             "provider": provider_name,
+            "category": category,
+            "source_app": source_app,
             "timestamp": time.time(),
             "message": (
                 f"Making a DoH request to {provider_name}..."
@@ -248,7 +308,10 @@ class DNSServer:
         # Update cache if valid response (NOERROR or NXDOMAIN)
         if resp_msg and wire_resp and err is None:
             if resp_msg.rcode() in (dns.rcode.NOERROR, dns.rcode.NXDOMAIN):
-                self.cache.put(qname, qtype, qclass, resp_msg, wire_resp)
+                self.cache.put(
+                    qname, qtype, qclass, resp_msg, wire_resp,
+                    category=category, source_app=source_app
+                )
 
         success_event = {
             "type": "query_resolved",
@@ -261,6 +324,8 @@ class DNSServer:
             "latency_ms": round(total_latency_ms, 2),
             "client_ip": client_ip,
             "provider": provider_name,
+            "category": category,
+            "source_app": source_app,
             "error": err,
             "timestamp": time.time(),
             "message": (

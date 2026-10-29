@@ -25,6 +25,8 @@ class CacheEntry:
         original_ttl: int,
         answers: List[str],
         rcode: int = dns.rcode.NOERROR,
+        category: str = "web",
+        source_app: str = "web",
     ):
         self.qname: str = qname.rstrip(".").lower()
         self.qtype: int = qtype
@@ -37,6 +39,8 @@ class CacheEntry:
         self.answers: List[str] = answers
         self.hit_count: int = 0
         self.rcode: int = rcode
+        self.category: str = category
+        self.source_app: str = source_app
         self.last_accessed_at: float = self.inserted_at
 
     @property
@@ -65,6 +69,8 @@ class CacheEntry:
             "original_ttl": self.original_ttl,
             "ttl_percent": pct,
             "hit_count": self.hit_count,
+            "category": self.category,
+            "source_app": self.source_app,
             "inserted_at": self.inserted_at,
             "inserted_at_iso": time.strftime(
                 "%H:%M:%S", time.localtime(self.inserted_at)
@@ -140,6 +146,8 @@ class DNSCache:
         qclass: int,
         resp_msg: dns.message.Message,
         raw_wire: bytes,
+        category: str = "web",
+        source_app: str = "web",
     ) -> Optional[CacheEntry]:
         """
         Caches a newly resolved DNS response.
@@ -175,6 +183,8 @@ class DNSCache:
             original_ttl=effective_ttl,
             answers=answers,
             rcode=resp_msg.rcode(),
+            category=category,
+            source_app=source_app,
         )
 
         with self._lock:
