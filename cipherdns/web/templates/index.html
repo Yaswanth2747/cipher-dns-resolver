@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>cipherDNS — Encrypted DNS-over-HTTPS Resolver</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">cipherDNS</span>
+                    <span class="brand-tag">v1.0 • Encrypted Resolver</span>
+                </div>
+            </div>
+
+            <!-- Top Controls: Mode & Upstream -->
+            <div class="header-controls">
+                <!-- Mode Toggle -->
+                <div class="control-group">
+                    <label class="control-label">Resolver Mode</label>
+                    <div class="mode-toggle">
+                        <button id="btnModeDoh" class="mode-btn active" onclick="setResolverMode(true)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                            cipherDNS (DoH)
+                        </button>
+                        <button id="btnModePlain" class="mode-btn" onclick="setResolverMode(false)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                            Plaintext DNS
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Provider Selector -->
+                <div class="control-group">
+                    <label class="control-label">Upstream DoH Provider</label>
+                    <div class="select-wrapper">
+                        <select id="providerSelect" onchange="changeProvider(this.value)">
+                            {% for key, prov in providers.items() %}
+                            <option value="{{ key }}" {% if key == status.get('current_provider', 'cloudflare') %}selected{% endif %}>
+                                {{ prov.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <svg class="select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                </div>
+
+                <!-- Live WebSocket Pill -->
+                <div class="status-pill connected" id="wsStatusPill">
+                    <span class="status-dot"></span>
+                    <span id="wsStatusText">Live Feed</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <!-- 1. Central Status & Circular Indicator -->
+        <section class="hero-status-section">
+            <div class="status-card">
+                <!-- Big Circular Status Ring -->
+                <div class="status-ring-container">
+                    <div class="status-ring" id="statusRing">
+                        <div class="ring-spinner" id="ringSpinner"></div>
+                        <div class="ring-inner">
+                            <div class="ring-icon" id="ringIcon">
+                                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                    <polyline points="9 12 11 14 15 10"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Central Status Text -->
+                <div class="status-text-block">
+                    <h1 class="status-primary-title" id="statusPrimaryText">cipherDNS running</h1>
+                    <p class="status-subtitle" id="statusSecondaryText">
+                        Listening on UDP port <span class="mono-badge" id="portBadge">{{ status.get('port', 53) }}</span> • Encrypted DoH active via <span class="provider-highlight" id="activeProviderText">Cloudflare</span>
+                    </p>
+                </div>
+
+                <!-- Quick Query Test Bar -->
+                <div class="interactive-test-bar">
+                    <div class="test-input-wrapper">
+                        <span class="input-prefix">dns://</span>
+                        <input type="text" id="testDomainInput" placeholder="Try netflix.com, github.com, google.com..." value="netflix.com" onkeydown="if(event.key==='Enter') executeManualQuery()">
+                    </div>
+                    <button class="primary-btn" onclick="executeManualQuery()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        Resolve
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Metrics & Telemetry Bar -->
+        <section class="telemetry-bar">
+            <div class="metric-card">
+                <span class="metric-label">Cache Hit Ratio</span>
+                <div class="metric-value-row">
+                    <span class="metric-number" id="metricHitRatio">0.0%</span>
+                    <span class="metric-sub" id="metricHitsMisses">0 hits / 0 misses</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">Cached Domains</span>
+                <div class="metric-value-row">
+                    <span class="metric-number" id="metricCachedEntries">0</span>
+                    <span class="metric-sub">in local memory</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">Average Latency</span>
+                <div class="metric-value-row">
+                    <span class="metric-number" id="metricAvgLatency">0 ms</span>
+                    <span class="metric-sub" id="metricLatencyTag">Cache &lt;1ms | DoH ~25ms</span>
+                </div>
+            </div>
+            <div class="metric-card action-card">
+                <span class="metric-label">Privacy & Security Audit</span>
+                <button class="secondary-btn zeek-btn" onclick="openZeekModal()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                    Run Zeek Packet Audit
+                </button>
+            </div>
+        </section>
+
+        <!-- 3. Cache Table Section -->
+        <section class="table-section">
+            <div class="table-card">
+                <div class="table-header">
+                    <div class="table-title-area">
+                        <h2 class="table-title">TTL Cache Table</h2>
+                        <span class="table-badge" id="tableCountBadge">0 entries</span>
+                    </div>
+
+                    <div class="table-actions">
+                        <div class="search-box">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" id="cacheSearchInput" placeholder="Filter domains..." oninput="filterCacheTable()">
+                        </div>
+
+                        <!-- Reload Button for Updating TTLs -->
+                        <button class="secondary-btn" id="btnReloadCache" onclick="reloadCacheTable()" title="Refresh remaining TTL counters">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                            Reload TTLs
+                        </button>
+
+                        <!-- Clear Cache Button -->
+                        <button class="secondary-btn danger-btn" onclick="clearCache()" title="Purge local cache">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Clear Cache
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="cache-table" id="cacheTable">
+                        <thead>
+                            <tr>
+                                <th>Domain Name</th>
+                                <th>Type</th>
+                                <th>Resolved Answer / IPs</th>
+                                <th>Remaining TTL</th>
+                                <th>Original TTL</th>
+                                <th>Hits</th>
+                                <th>Cached At</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cacheTableBody">
+                            <tr class="empty-row" id="emptyCacheRow">
+                                <td colspan="8">
+                                    <div class="empty-state">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                        <span>No cached entries yet. Make a DNS request or try <code>netflix.com</code> above!</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Real-Time Activity Log Feed -->
+        <section class="live-activity-section">
+            <div class="table-card">
+                <div class="table-header">
+                    <div class="table-title-area">
+                        <h2 class="table-title">Live Resolution Stream</h2>
+                        <span class="table-badge live-pulse">Real-time</span>
+                    </div>
+                    <button class="link-btn" onclick="clearLogFeed()">Clear Feed</button>
+                </div>
+                <div class="log-stream-container" id="logStreamContainer">
+                    <div class="log-empty" id="logEmptyState">Awaiting inbound DNS datagrams on port {{ status.get('port', 53) }}...</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Zeek Privacy Audit Modal -->
+    <div class="modal-backdrop" id="zeekModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <div class="modal-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="modal-title">Zeek Network Traffic & Privacy Verification</h3>
+                        <p class="modal-desc">Comparative packet inspection between Plaintext DNS and cipherDNS DoH</p>
+                    </div>
+                </div>
+                <button class="close-btn" onclick="closeZeekModal()">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="modal-input-row">
+                    <label>Target Domain to Audit:</label>
+                    <input type="text" id="zeekDomainInput" value="netflix.com" placeholder="netflix.com">
+                    <button class="primary-btn" id="btnExecuteZeekAudit" onclick="runZeekAudit()">
+                        Run Zeek Audit
+                    </button>
+                </div>
+
+                <div id="zeekLoading" class="zeek-loading-state" style="display: none;">
+                    <div class="spinner-small"></div>
+                    <span>Capturing pcaps and executing <code>/opt/zeek/bin/zeek -r</code>...</span>
+                </div>
+
+                <div id="zeekResultsArea" style="display: none;">
+                    <div class="audit-verdict-banner" id="zeekVerdictBanner">
+                        <!-- Filled by JS -->
+                    </div>
+
+                    <div class="comparison-grid">
+                        <!-- Traditional Plaintext Column -->
+                        <div class="audit-column traditional-box">
+                            <div class="column-header">
+                                <span class="badge badge-danger">Vulnerable</span>
+                                <h4>Traditional DNS (UDP :53)</h4>
+                            </div>
+                            <p class="column-desc">Simulates query sent over plain local network.</p>
+                            <div class="evidence-box">
+                                <div class="evidence-title">Zeek dns.log Inspection:</div>
+                                <pre class="log-snippet" id="plainZeekLog"></pre>
+                            </div>
+                            <div class="risk-note" id="plainRiskNote"></div>
+                        </div>
+
+                        <!-- cipherDNS DoH Column -->
+                        <div class="audit-column cipher-box">
+                            <div class="column-header">
+                                <span class="badge badge-success">Encrypted</span>
+                                <h4>cipherDNS (DoH / TLS 1.3 :443)</h4>
+                            </div>
+                            <p class="column-desc">Encapsulated via RFC 8484 over HTTPS to Cloudflare.</p>
+                            <div class="evidence-box">
+                                <div class="evidence-title">Zeek dns.log Inspection:</div>
+                                <pre class="log-snippet" id="dohZeekLog"></pre>
+                            </div>
+                            <div class="risk-note" id="dohSecurityNote"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System DNS Instructions Drawer / Modal -->
+    <div class="modal-backdrop" id="systemSetupModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">Configuring System DNS for cipherDNS</h3>
+                <button class="close-btn" onclick="closeSystemModal()">&times;</button>
+            </div>
+            <div class="modal-body doc-body">
+                <p>To route all system traffic (including Google Chrome, Firefox, curl) through <strong>cipherDNS</strong> on Linux:</p>
+                
+                <h4>Option 1: Point systemd-resolved to cipherDNS (Recommended)</h4>
+                <pre class="code-block"><code>resolvectl dns enp2s0 127.0.0.1
+resolvectl flush-caches</code></pre>
+
+                <h4>Option 2: Direct /etc/resolv.conf override</h4>
+                <pre class="code-block"><code>sudo bash -c 'echo "nameserver 127.0.0.1" > /etc/resolv.conf'</code></pre>
+
+                <h4>Testing from Terminal</h4>
+                <pre class="code-block"><code>dig @127.0.0.1 netflix.com
+curl -v https://netflix.com</code></pre>
+
+                <h4>To Restore Original DNS</h4>
+                <pre class="code-block"><code>./scripts/restore_system_dns.sh</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

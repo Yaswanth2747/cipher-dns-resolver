@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.pcap
+data/pcaps/
+data/zeek_logs/
