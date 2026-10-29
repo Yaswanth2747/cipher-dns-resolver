@@ -52,7 +52,7 @@ body {
 }
 
 .header-container {
-    max-width: 1280px;
+    max-width: 1540px;
     margin: 0 auto;
     display: flex;
     justify-content: space-between;
@@ -209,9 +209,10 @@ body {
 
 /* Main Content */
 .main-content {
-    max-width: 1280px;
+    max-width: 1540px;
+    width: 100%;
     margin: 0 auto;
-    padding: 32px 24px 64px 24px;
+    padding: 28px 24px 64px 24px;
     display: flex;
     flex-direction: column;
     gap: 28px;
@@ -622,12 +623,13 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-weight: 600;
-    padding: 12px 18px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--border-subtle);
+    white-space: nowrap;
 }
 
 .cache-table td {
-    padding: 14px 18px;
+    padding: 12px 14px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     vertical-align: middle;
 }
@@ -706,7 +708,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    min-width: 110px;
+    min-width: 95px;
 }
 
 .ttl-text {
@@ -856,8 +858,8 @@ body {
     background: var(--bg-card);
     border: 1px solid var(--border-highlight);
     border-radius: 16px;
-    width: 100%;
-    max-width: 820px;
+    width: 95%;
+    max-width: 1180px;
     max-height: 90vh;
     overflow-y: auto;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
@@ -1053,11 +1055,11 @@ body {
 
 .log-snippet {
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: 0.76rem;
     color: #e2e8f0;
     white-space: pre-wrap;
     word-break: break-all;
-    max-height: 120px;
+    max-height: 220px;
     overflow-y: auto;
 }
 
