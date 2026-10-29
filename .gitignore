@@ -5,4 +5,10 @@ __pycache__/
 *.pcap
 data/pcaps/
 data/zeek_logs/
+*.aux
+*.log
+*.out
+*.toc
+*.listing
+
 

@@ -632,7 +632,7 @@ body {
 .cache-table td {
     padding: 12px 14px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-    vertical-align: middle;
+    vertical-align: middle !important;
 }
 
 .cache-table tr:hover td {
@@ -643,14 +643,16 @@ body {
     font-family: var(--font-mono);
     font-weight: 600;
     color: var(--text-primary);
-    vertical-align: middle;
+    vertical-align: middle !important;
 }
 
 .domain-name-link {
     cursor: pointer;
     color: var(--text-primary);
     transition: color 0.15s ease;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
 }
 
 .domain-name-link:hover {

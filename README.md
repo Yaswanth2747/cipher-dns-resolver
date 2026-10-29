@@ -8,6 +8,8 @@
 > **CS416 Computer Systems Security Course Project**  
 > An encrypted DNS caching proxy that secures local network DNS queries using **DNS-over-HTTPS (DoH, RFC 8484)**, featuring a real-time dark-mode telemetry dashboard and automated **Zeek** network privacy verification.
 
+![cipherDNS Real-Time Telemetry Interface](report/images/interface_dashboard.png)
+
 ---
 
 ## 🌟 Key Highlights
@@ -21,7 +23,7 @@
   - Runtime resolver mode switch (DoH vs Traditional Plaintext DNS) and upstream provider selector.
   - Interactive manual test query bar.
 - **Empirical Zeek Privacy Verification:** Runs `/opt/zeek/bin/zeek` on live captures to prove traditional DNS leaks queries in `dns.log` while cipherDNS conceals all traffic inside TLS 1.3 encrypted application records.
-- **Formal Course PDF Report:** Publication-grade 6-page report strictly adhering to the CS416 8-section template with project-specific evidence index.
+- **Formal Course PDF Report:** Comprehensive 16-page report strictly adhering to the CS416 8-section template with project-specific evidence index.
 
 ---
 
@@ -67,7 +69,8 @@
 ### 1. Environment Setup
 ```bash
 # Clone and enter directory
-cd /home/yaswanth-ram-kumar/CS416
+git clone https://github.com/Yaswanth2747/cipher-dns-resolver.git
+cd cipher-dns-resolver
 
 # Activate virtual environment
 source .venv/bin/activate
@@ -153,8 +156,8 @@ pytest tests/ -v
 
 ---
 
-## 📄 Final PDF Report & Screencast Script
+## 📄 Final Project PDF Report
 
-- **PDF Report:** Located at `report/cipherDNS_Final_Report.pdf` (compile anytime via `python3 report/generate_report.py`).
-- **Screencast Script:** Located at `SCREENCAST_SCRIPT.md` (detailed 10-minute presentation guide).
+- **Report Deliverable:** Located at [`Team_7_Encrypted_DNS_Resolver.pdf`](Team_7_Encrypted_DNS_Resolver.pdf) in the repository root and under [`report/Team_7_Encrypted_DNS_Resolver.pdf`](report/Team_7_Encrypted_DNS_Resolver.pdf).
+- **LaTeX Source:** Located at [`report/Team_7_Encrypted_DNS_Resolver.tex`](report/Team_7_Encrypted_DNS_Resolver.tex).
 
