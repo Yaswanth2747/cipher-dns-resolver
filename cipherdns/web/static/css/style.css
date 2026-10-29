@@ -626,6 +626,7 @@ body {
     padding: 12px 14px;
     border-bottom: 1px solid var(--border-subtle);
     white-space: nowrap;
+    vertical-align: middle;
 }
 
 .cache-table td {
@@ -642,9 +643,19 @@ body {
     font-family: var(--font-mono);
     font-weight: 600;
     color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    vertical-align: middle;
+}
+
+.domain-name-link {
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: color 0.15s ease;
+    display: inline-block;
+}
+
+.domain-name-link:hover {
+    color: var(--accent-cyan);
+    text-decoration: underline;
 }
 
 .record-type-badge {
@@ -1447,17 +1458,20 @@ body {
     padding: 10px 14px;
     border-bottom: 1px solid var(--border-subtle);
     color: var(--text-secondary);
+    vertical-align: middle;
 }
 
 .duel-table tr:last-child td {
     border-bottom: none;
 }
 
-/* GeoIP & Country Flag Tags in Cache Table */
+/* Resolved Answer IP Badges in Cache Table */
 .answer-tag-list {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    max-width: 520px;
 }
 
 .ip-geo-badge {
@@ -1471,6 +1485,7 @@ body {
     font-size: 0.75rem;
     font-family: var(--font-mono);
     color: #e2e8f0;
+    white-space: nowrap;
 }
 
 .flag-emoji {
