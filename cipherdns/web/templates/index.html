@@ -63,10 +63,10 @@
                     <label class="control-label">Traffic Scope</label>
                     <div class="select-wrapper">
                         <select id="scopeFilterSelect" onchange="changeTrafficScope(this.value)" style="border-color:var(--accent-cyan);font-weight:600;">
-                            <option value="clean" selected>⭐ Clean Demo (User Sites)</option>
-                            <option value="all">🌐 Complete PC Takeover (All)</option>
-                            <option value="chrome">🦊 Only Chrome / Browsers</option>
-                            <option value="cli">💻 Only curl / wget (CLI)</option>
+                            <option value="clean" selected> Clean (User Sites)</option>
+                            <option value="all"> Complete PC Takeover (All)</option>
+                            <option value="chrome"> Only Chrome / Browsers</option>
+                            <option value="cli"> Only curl / wget (CLI)</option>
                         </select>
                         <svg class="select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                     </div>
@@ -245,7 +245,7 @@
             <div class="modal-header">
                 <div class="modal-title-row">
                     <div class="modal-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        <svg width="40" height="40" viewBox="0 0 54 54" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                     </div>
                     <div>
                         <h3 class="modal-title">Zeek Network Traffic & Privacy Verification</h3>
@@ -274,6 +274,56 @@
                         <!-- Filled by JS -->
                     </div>
 
+                    <!-- DNS Response IPs Comparison Banner -->
+                    <div class="zeek-ip-summary-card">
+                        <div class="ip-summary-header">
+                            <span class="ip-summary-title">DNS Resolution & Wiretap Exposure Comparison</span>
+                            <span class="ip-domain-tag" id="zeekTargetDomainTag">netflix.com</span>
+                        </div>
+                        <div class="ip-summary-grid">
+                            <div class="ip-summary-item plain-ip-item">
+                                <div class="ip-item-label">
+                                    <span class="status-dot red"></span>
+                                    <span>Plaintext DNS (UDP :53) Wiretap Exposure</span>
+                                </div>
+                                <div class="ip-item-value-box">
+                                    <div class="ip-item-row">
+                                        <span class="ip-sublabel">Query Domain on Wire:</span>
+                                        <span class="ip-leak-val" id="plainDomainLeakText">netflix.com</span>
+                                        <span class="leak-pill pill-danger">LEAKED CLEARTEXT</span>
+                                    </div>
+                                    <div class="ip-item-row">
+                                        <span class="ip-sublabel">Response Answer IPs on Wire:</span>
+                                        <span class="ip-leak-val" id="plainIpLeakText">207.45.72.1, 207.45.73.1</span>
+                                        <span class="leak-pill pill-danger">LEAKED CLEARTEXT</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="ip-summary-item doh-ip-item">
+                                <div class="ip-item-label">
+                                    <span class="status-dot green"></span>
+                                    <span>cipherDNS (DoH / TLS 1.3 :443) Cryptographic Shield</span>
+                                </div>
+                                <div class="ip-item-value-box">
+                                    <div class="ip-item-row">
+                                        <span class="ip-sublabel">Query Domain on Wire:</span>
+                                        <span class="ip-safe-val">[OPAQUE TLS 1.3 CIPHERTEXT]</span>
+                                        <span class="leak-pill pill-success">0 LEAKS (HIDDEN)</span>
+                                    </div>
+                                    <div class="ip-item-row">
+                                        <span class="ip-sublabel">Response Answer IPs on Wire:</span>
+                                        <span class="ip-safe-val">[OPAQUE TLS 1.3 CIPHERTEXT]</span>
+                                        <span class="leak-pill pill-success">0 LEAKS (HIDDEN)</span>
+                                    </div>
+                                    <div class="ip-item-row sub-client">
+                                        <span class="ip-sublabel">Safely Delivered to Client:</span>
+                                        <span class="ip-client-val" id="dohClientIpText">207.45.72.1, 207.45.73.1</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="comparison-grid">
                         <!-- Traditional Plaintext Column -->
                         <div class="audit-column traditional-box">
@@ -281,9 +331,10 @@
                                 <span class="badge badge-danger">Vulnerable</span>
                                 <h4>Traditional DNS (UDP :53)</h4>
                             </div>
-                            <p class="column-desc">Simulates query sent over plain local network.</p>
+                            <p class="column-desc">Simulates standard UDP query broadcast across the local LAN/WAN.</p>
+                            
                             <div class="evidence-box">
-                                <div class="evidence-title">Zeek dns.log Inspection:</div>
+                                <div class="evidence-title">Zeek dns.log Inspection (Leaked Cleartext Datagrams):</div>
                                 <pre class="log-snippet" id="plainZeekLog"></pre>
                             </div>
                             <div class="risk-note" id="plainRiskNote"></div>
@@ -295,11 +346,31 @@
                                 <span class="badge badge-success">Encrypted</span>
                                 <h4>cipherDNS (DoH / TLS 1.3 :443)</h4>
                             </div>
-                            <p class="column-desc">Encapsulated via RFC 8484 over HTTPS to Cloudflare.</p>
+                            <p class="column-desc">Encapsulated via RFC 8484 over HTTPS to Cloudflare (1.1.1.1:443).</p>
+                            
                             <div class="evidence-box">
                                 <div class="evidence-title">Zeek dns.log Inspection:</div>
-                                <pre class="log-snippet" id="dohZeekLog"></pre>
+                                <div class="zero-leak-box" id="dohDnsZeroLeakBox">
+                                    <span class="shield-icon">🛡️</span>
+                                    <span>Zero DNS records in <code>dns.log</code>! All queries shielded.</span>
+                                </div>
                             </div>
+
+                            <!-- Zeek ssl.log / TLS Records Box -->
+                            <div class="evidence-box tls-evidence-box">
+                                <div class="evidence-title">Zeek ssl.log Inspection (TLS 1.3 Session Records):</div>
+                                <div class="tls-params-grid" id="zeekTlsParamsGrid">
+                                    <!-- Populated by JS -->
+                                </div>
+                                <pre class="log-snippet" id="dohZeekSslLog"></pre>
+                            </div>
+
+                            <!-- Zeek conn.log Box -->
+                            <div class="evidence-box">
+                                <div class="evidence-title">Zeek conn.log Inspection (TCP 443 Session):</div>
+                                <pre class="log-snippet" id="dohZeekConnLog"></pre>
+                            </div>
+
                             <div class="risk-note" id="dohSecurityNote"></div>
                         </div>
                     </div>

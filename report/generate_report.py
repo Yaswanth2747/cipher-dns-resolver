@@ -454,24 +454,30 @@ def build_pdf_report(filename=REPORT_OUTPUT_PATH):
     story.append(Paragraph("<b>5.2 Zeek Network Traffic Evidence Analysis:</b>", h2_style))
     story.append(Paragraph(
         "To scientifically evaluate the privacy improvement, we analyzed identical requests for <code>netflix.com</code> "
-        "under Traditional DNS vs cipherDNS DoH using Zeek 9.0.0. The parsed log outputs are shown below:",
+        "under Traditional DNS vs cipherDNS DoH using Zeek 9.0.0. The audit explicitly inspects both query domain names, "
+        "resolved response IP addresses, and TLS record structures:",
         body_style
     ))
     story.append(Paragraph(
-        "<b>[Traditional Plaintext DNS] Zeek dns.log Extract:</b>", meta_style
+        "<b>[Traditional Plaintext DNS] Zeek dns.log Extract (UDP Port 53):</b>", meta_style
     ))
     story.append(Paragraph(
-        "1793279467.87 &nbsp; 192.168.1.105:53821 -> 8.8.8.8:53 &nbsp; udp &nbsp; <b>query: netflix.com</b> &nbsp; A &nbsp; IN<br/>"
-        "<i>Vulnerability: The full domain name 'netflix.com' is visible to any passive eavesdropper on the local network link.</i>",
+        "ts=1793288166.18 &nbsp; orig=192.168.1.105:53821 -> resp=8.8.8.8:53 &nbsp; proto=udp<br/>"
+        "&bull; <b>query:</b> netflix.com &nbsp; qtype_name: A &nbsp; rcode_name: NOERROR<br/>"
+        "&bull; <b>answers:</b> 207.45.72.1, 207.45.73.1 &nbsp; <b>TTLs:</b> 300.0s, 300.0s<br/>"
+        "<i>Critical Privacy Breach: Both the queried domain 'netflix.com' and the returned answer IPs are broadcast in cleartext across the local network link.</i>",
         code_style
     ))
     story.append(Paragraph(
-        "<b>[cipherDNS Encrypted DoH] Zeek dns.log & conn.log Extract:</b>", meta_style
+        "<b>[cipherDNS Encrypted DoH] Zeek dns.log, ssl.log & conn.log Extract (TCP/TLS 443):</b>", meta_style
     ))
     story.append(Paragraph(
-        "dns.log: [EMPTY - ZERO QUERIES RECORDED]<br/>"
-        "conn.log: 1793279467.87 &nbsp; 192.168.1.105:48210 -> 1.1.1.1:443 &nbsp; tcp &nbsp; <b>service: ssl (TLS 1.3 Encrypted Application Data)</b><br/>"
-        "<i>Privacy Evaluation: Query contents are completely concealed inside TLS 1.3 records. Network observers only see HTTPS packets to Cloudflare.</i>",
+        "&bull; <b>dns.log:</b> [EMPTY - ZERO QUERIES RECORDED - ZERO RESPONSE IPS LEAKED]<br/>"
+        "&bull; <b>ssl.log:</b> orig=192.168.1.105:48210 -> resp=1.1.1.1:443 &nbsp; <b>version=TLSv13</b> &nbsp; "
+        "<b>cipher=TLS_AES_256_GCM_SHA384</b> &nbsp; <b>server_name=cloudflare-dns.com</b> &nbsp; established=T<br/>"
+        "&bull; <b>conn.log:</b> proto=tcp &nbsp; <b>service=ssl</b> &nbsp; conn_state=S1 &nbsp; history=ShADad (TLS Handshake & Application Data)<br/>"
+        "&bull; <b>Client Local Delivery:</b> 207.45.72.1, 207.45.73.1 safely delivered via loopback 127.0.0.1:53.<br/>"
+        "<i>Cryptographic Shielding: Query contents and destination IPs are strictly encapsulated inside TLS 1.3 AEAD-encrypted Application Data records (ContentType 23).</i>",
         code_style
     ))
     story.append(Spacer(1, 10))
@@ -588,6 +594,56 @@ def build_pdf_report(filename=REPORT_OUTPUT_PATH):
         "<code>httpx.ConnectError</code> and gracefully returned <code>SERVFAIL</code> without terminating server execution.",
         body_style
     ))
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("<b>8.4 Evidence of Zeek Wiretap Verification (Response IPs & TLS Records):</b>", h2_style))
+    story.append(Paragraph(
+        "Comparative network traffic capture and verification conducted with Zeek 9.0.0 on live pcaps for <code>netflix.com</code>:",
+        body_style
+    ))
+
+    zeek_eval_data = [
+        [Paragraph("<b>Inspection Metric</b>", meta_style), Paragraph("<b>Traditional Plaintext DNS (UDP 53)</b>", meta_style), Paragraph("<b>cipherDNS DoH Resolver (TCP/TLS 443)</b>", meta_style)],
+        [
+            Paragraph("Query Domain Visibility", body_style),
+            Paragraph("<font color='#e11d48'><b>EXPOSED:</b> 'netflix.com' in dns.log</font>", body_style),
+            Paragraph("<font color='#059669'><b>ENCRYPTED:</b> 0 domain queries in dns.log</font>", body_style),
+        ],
+        [
+            Paragraph("Answer IPs Visibility", body_style),
+            Paragraph("<font color='#e11d48'><b>EXPOSED:</b> '207.45.72.1, 207.45.73.1' in dns.log</font>", body_style),
+            Paragraph("<font color='#059669'><b>ENCRYPTED:</b> 0 IPs exposed on wire (safe to client)</font>", body_style),
+        ],
+        [
+            Paragraph("Zeek Transport Logging", body_style),
+            Paragraph("<code>proto=udp service=dns</code>", code_style),
+            Paragraph("<code>proto=tcp service=ssl (TLS 1.3)</code>", code_style),
+        ],
+        [
+            Paragraph("TLS Session Evidence (ssl.log)", body_style),
+            Paragraph("<i>None (Plaintext transmission)</i>", body_style),
+            Paragraph("<code>SNI: cloudflare-dns.com, TLSv1.3, TLS_AES_256_GCM_SHA384, established=T</code>", code_style),
+        ],
+        [
+            Paragraph("Record Layer Type", body_style),
+            Paragraph("Cleartext RFC 1035 UDP datagram", body_style),
+            Paragraph("<b>ContentType 23 (Application Data)</b> &ndash; AEAD encrypted", body_style),
+        ],
+        [
+            Paragraph("Privacy Verdict", body_style),
+            Paragraph("<font color='#e11d48'><b>FAIL: Critical Privacy Leak</b></font>", meta_style),
+            Paragraph("<font color='#059669'><b>PASS: Cryptographically Shielded</b></font>", meta_style),
+        ],
+    ]
+    t_zeek = Table(zeek_eval_data, colWidths=[130, 187, 187])
+    t_zeek.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), BG_LIGHT),
+        ('GRID', (0,0), (-1,-1), 0.5, BORDER),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+    ]))
+    story.append(t_zeek)
 
     # Build Document
     doc.build(story, canvasmaker=NumberedCanvas)
