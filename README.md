@@ -8,11 +8,9 @@
 > **CS416 Computer Systems Security Course Project**  
 > An encrypted DNS caching proxy that secures local network DNS queries using **DNS-over-HTTPS (DoH, RFC 8484)**, featuring a real-time dark-mode telemetry dashboard and automated **Zeek** network privacy verification.
 
-![cipherDNS Real-Time Telemetry Interface](report/images/interface_dashboard.png)
-
 ---
 
-## 🌟 Key Highlights
+## Key Highlights
 
 - **Standard UDP Port 53 Ingestion:** Receives queries from standard OS network stacks, browsers (Google Chrome, Firefox), and CLI utilities (`dig`, `curl`, `nslookup`).
 - **Cryptographic Encryption via DoH (RFC 8484):** Uses HTTP/2 POST over TLS 1.3 with upstream providers like **Cloudflare** (`1.1.1.1`) and **Google** (`8.8.8.8`).
@@ -25,9 +23,10 @@
 - **Empirical Zeek Privacy Verification:** Runs `/opt/zeek/bin/zeek` on live captures to prove traditional DNS leaks queries in `dns.log` while cipherDNS conceals all traffic inside TLS 1.3 encrypted application records.
 - **Formal Course PDF Report:** Comprehensive 16-page report strictly adhering to the CS416 8-section template with project-specific evidence index.
 
+![cipherDNS Real-Time Telemetry Interface](report/images/interface_dashboard.png)
 ---
 
-## 🏗 System Architecture
+## System Architecture
 
 ```
 +-------------------------------------------------------------------+
@@ -64,7 +63,7 @@
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Environment Setup
 ```bash
@@ -90,11 +89,11 @@ python3 run.py --dns-port 5300 --web-port 8000
 
 ### 3. Access Web Dashboard
 Open your web browser and navigate to:  
-👉 **`http://localhost:8000`**
+**`http://localhost:8000`**
 
 ---
 
-## 🌐 Testing & System DNS Integration
+## Testing & System DNS Integration
 
 ### Test with `dig`
 ```bash
@@ -119,7 +118,7 @@ dig @127.0.0.1 -p 5300 netflix.com
 
 ---
 
-## 🔍 Zeek Privacy Audit
+## Zeek Privacy Audit
 
 Run the automated network audit comparing Traditional Plaintext DNS against cipherDNS DoH:
 ```bash
@@ -141,7 +140,7 @@ Run the automated network audit comparing Traditional Plaintext DNS against ciph
 
 ---
 
-## 🧪 Automated Test Suite
+## Automated Test Suite
 
 Run all functional, security, and integration tests:
 ```bash
@@ -155,9 +154,3 @@ pytest tests/ -v
 - `tests/test_server.py`: Async UDP DNS pipeline, sub-millisecond cache delivery, mode toggling.
 
 ---
-
-## 📄 Final Project PDF Report
-
-- **Report Deliverable:** Located at [`Team_7_Encrypted_DNS_Resolver.pdf`](Team_7_Encrypted_DNS_Resolver.pdf) in the repository root and under [`report/Team_7_Encrypted_DNS_Resolver.pdf`](report/Team_7_Encrypted_DNS_Resolver.pdf).
-- **LaTeX Source:** Located at [`report/Team_7_Encrypted_DNS_Resolver.tex`](report/Team_7_Encrypted_DNS_Resolver.tex).
-
