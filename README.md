@@ -15,13 +15,11 @@
 - **Standard UDP Port 53 Ingestion:** Receives queries from standard OS network stacks, browsers (Google Chrome, Firefox), and CLI utilities (`dig`, `curl`, `nslookup`).
 - **Cryptographic Encryption via DoH (RFC 8484):** Uses HTTP/2 POST over TLS 1.3 with upstream providers like **Cloudflare** (`1.1.1.1`) and **Google** (`8.8.8.8`).
 - **Dynamic TTL-Aware Caching:** Compliant with RFC 1035/2181; decrements remaining TTLs on cache hits, delivering responses in **< 1 ms**.
-- **Classy Dark-Themed Web App:**
-  - Big circular animation ring reflecting live query states (*cipherDNS running* &rarr; *Making a DoH request to Cloudflare...* &rarr; *Successfully delivered cached entry*).
+- **Web App:**
   - Live TTL cache table with live countdown, reload button, and most recently added sites at the top.
   - Runtime resolver mode switch (DoH vs Traditional Plaintext DNS) and upstream provider selector.
   - Interactive manual test query bar.
 - **Empirical Zeek Privacy Verification:** Runs `/opt/zeek/bin/zeek` on live captures to prove traditional DNS leaks queries in `dns.log` while cipherDNS conceals all traffic inside TLS 1.3 encrypted application records.
-- **Formal Course PDF Report:** Comprehensive 16-page report strictly adhering to the CS416 8-section template with project-specific evidence index.
 
 ![cipherDNS Real-Time Telemetry Interface](report/images/interface_dashboard.png)
 ---
