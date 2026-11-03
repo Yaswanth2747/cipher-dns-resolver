@@ -7,8 +7,12 @@
 
 > **CS416 Computer Systems Security Course Project**  
 > An encrypted DNS caching proxy that secures local network DNS queries using **DNS-over-HTTPS (DoH, RFC 8484)**, featuring a real-time dark-mode telemetry dashboard and automated **Zeek** network privacy verification.
-
 ---
+<div align="center">
+  <img src="architecture.png" alt="Our Architecture">
+</div>
+
+
 
 ## Key Highlights
 
